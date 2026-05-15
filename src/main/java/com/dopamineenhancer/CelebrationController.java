@@ -10,13 +10,20 @@ public class CelebrationController
     private final Client client;
     private final DopamineEnhancerConfig config;
     private final DopamineEnhancerOverlay overlay;
+    private final DancingNpcEffect dancingNpcEffect;
 
     @Inject
-    CelebrationController(Client client, DopamineEnhancerConfig config, DopamineEnhancerOverlay overlay)
+    CelebrationController(
+        Client client,
+        DopamineEnhancerConfig config,
+        DopamineEnhancerOverlay overlay,
+        DancingNpcEffect dancingNpcEffect
+    )
     {
         this.client = client;
         this.config = config;
         this.overlay = overlay;
+        this.dancingNpcEffect = dancingNpcEffect;
     }
 
     public void celebrate(CelebrationType type)
@@ -29,6 +36,11 @@ public class CelebrationController
         if (config.overlayEffects())
         {
             overlay.show(type.getDefaultMessage());
+        }
+
+        if (config.dancingNpcEffect())
+        {
+            dancingNpcEffect.show();
         }
     }
 
