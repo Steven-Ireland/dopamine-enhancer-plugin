@@ -15,6 +15,7 @@ import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.Model;
 import net.runelite.api.Perspective;
+import net.runelite.api.Projection;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 
@@ -52,7 +53,7 @@ class ModelOverlayRenderer
         int vertices = model.getVerticesCount();
         int[] canvasX = new int[vertices];
         int[] canvasY = new int[vertices];
-        double[] cameraDepth = calculateCameraDepths(model, location, state.getZ(), state.getOrientation());
+        double[] cameraDepth = calculateCameraDepths(model, worldView, location, state.getZ(), state.getOrientation());
 
         Perspective.modelToCanvas(
             client,
@@ -123,21 +124,48 @@ class ModelOverlayRenderer
         }
     }
 
-    private double[] calculateCameraDepths(Model model, LocalPoint location, int z, int orientation)
+    private double[] calculateCameraDepths(Model model, WorldView worldView, LocalPoint location, int z, int orientation)
     {
         int vertices = model.getVerticesCount();
         double[] depths = new double[vertices];
 
-        float yawSin = Perspective.SINE[client.getCameraYaw() & 2047] / 65536.0f;
-        float yawCos = Perspective.COSINE[client.getCameraYaw() & 2047] / 65536.0f;
-        float pitchSin = Perspective.SINE[client.getCameraPitch() & 2047] / 65536.0f;
-        float pitchCos = Perspective.COSINE[client.getCameraPitch() & 2047] / 65536.0f;
         float rotateSin = Perspective.SINE[orientation & 2047] / 65536.0f;
         float rotateCos = Perspective.COSINE[orientation & 2047] / 65536.0f;
 
-        int centerX = location.getX() - client.getCameraX();
-        int centerY = location.getY() - client.getCameraY();
-        int centerZ = z - client.getCameraZ();
+        if (!worldView.isTopLevel())
+        {
+            return calculateProjectionDepths(model, worldView, location, z, orientation, rotateSin, rotateCos, depths);
+        }
+
+        float yawSin;
+        float yawCos;
+        float pitchSin;
+        float pitchCos;
+        float centerX;
+        float centerY;
+        float centerZ;
+        if (client.isGpu())
+        {
+            double cameraYaw = client.getCameraFpYaw();
+            double cameraPitch = client.getCameraFpPitch();
+            yawSin = (float) Math.sin(cameraYaw);
+            yawCos = (float) Math.cos(cameraYaw);
+            pitchSin = (float) Math.sin(cameraPitch);
+            pitchCos = (float) Math.cos(cameraPitch);
+            centerX = location.getX() - (float) client.getCameraFpX();
+            centerY = location.getY() - (float) client.getCameraFpY();
+            centerZ = z - (float) client.getCameraFpZ();
+        }
+        else
+        {
+            yawSin = Perspective.SINE[client.getCameraYaw() & 2047] / 65536.0f;
+            yawCos = Perspective.COSINE[client.getCameraYaw() & 2047] / 65536.0f;
+            pitchSin = Perspective.SINE[client.getCameraPitch() & 2047] / 65536.0f;
+            pitchCos = Perspective.COSINE[client.getCameraPitch() & 2047] / 65536.0f;
+            centerX = location.getX() - client.getCameraX();
+            centerY = location.getY() - client.getCameraY();
+            centerZ = z - client.getCameraZ();
+        }
 
         float[] verticesX = model.getVerticesX();
         float[] verticesY = model.getVerticesZ();
@@ -162,6 +190,55 @@ class ModelOverlayRenderer
 
             float y1 = y * yawCos - x * yawSin;
             depths[i] = y1 * pitchCos + height * pitchSin;
+        }
+
+        return depths;
+    }
+
+    private static double[] calculateProjectionDepths(
+        Model model,
+        WorldView worldView,
+        LocalPoint location,
+        int z,
+        int orientation,
+        float rotateSin,
+        float rotateCos,
+        double[] depths)
+    {
+        Projection projection = worldView.getCanvasProjection();
+        if (projection == null)
+        {
+            for (int i = 0; i < depths.length; i++)
+            {
+                depths[i] = Double.NEGATIVE_INFINITY;
+            }
+            return depths;
+        }
+
+        float[] verticesX = model.getVerticesX();
+        float[] verticesY = model.getVerticesZ();
+        float[] verticesZ = model.getVerticesY();
+        float[] projected = new float[3];
+
+        for (int i = 0; i < depths.length; i++)
+        {
+            float x = verticesX[i];
+            float y = verticesY[i];
+            float height = verticesZ[i];
+
+            if (orientation != 0)
+            {
+                float originalX = x;
+                x = originalX * rotateCos + y * rotateSin;
+                y = y * rotateCos - originalX * rotateSin;
+            }
+
+            x += location.getX();
+            y += location.getY();
+            height += z;
+
+            projection.project(x, height, y, projected);
+            depths[i] = projected[2];
         }
 
         return depths;

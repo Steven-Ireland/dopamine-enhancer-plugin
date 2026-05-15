@@ -1,12 +1,13 @@
 package com.dopamineenhancer;
 
+import java.awt.Graphics2D;
 import java.time.Duration;
 import java.time.Instant;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Animation;
-import net.runelite.api.AnimationController;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.Model;
 import net.runelite.api.ModelData;
 import net.runelite.api.NPCComposition;
@@ -14,6 +15,7 @@ import net.runelite.api.NpcID;
 import net.runelite.api.Player;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ClientTick;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.gameval.AnimationID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
@@ -26,13 +28,15 @@ class DancingNpcEffect
     private static final int DANCE_ANIMATION_ID = AnimationID.EMOTE_PARTY_LOOP;
     private static final int SCREEN_OFFSET_X = 220;
     private static final int SCREEN_OFFSET_Y = -80;
+    private static final int APPROXIMATE_MODEL_HEIGHT = 240;
     private static final int TARGET_SCREEN_HEIGHT = 180;
 
     private final Client client;
     private final ClientThread clientThread;
 
     private Model baseModel;
-    private AnimationController danceController;
+    private Animation danceAnimation;
+    private volatile int animationTicks;
     private Instant expiresAt = Instant.EPOCH;
     private DancingNpcModelState modelState = DancingNpcModelState.inactive();
 
@@ -46,18 +50,9 @@ class DancingNpcEffect
     void show()
     {
         expiresAt = Instant.now().plus(EFFECT_DURATION);
+        animationTicks = 0;
         clientThread.invoke(() ->
         {
-            if (!ensureReady())
-            {
-                return false;
-            }
-
-            if (danceController != null)
-            {
-                danceController.reset();
-            }
-
             updatePosition();
             return true;
         });
@@ -65,17 +60,24 @@ class DancingNpcEffect
 
     void shutDown()
     {
-        clientThread.invoke(this::deactivate);
+        clientThread.invoke(this::reset);
     }
 
-    DancingNpcModelState getModelState()
+    void render(Graphics2D graphics, ModelOverlayRenderer modelOverlayRenderer)
     {
-        if (modelState.isActive())
+        DancingNpcModelState state = modelState;
+        if (!state.isActive())
         {
-            return modelState.withModel(getCurrentModel());
+            return;
         }
 
-        return modelState;
+        Model renderModel = getRenderModel(state.getAnimationTicks());
+        if (renderModel == null)
+        {
+            return;
+        }
+
+        modelOverlayRenderer.render(graphics, state.withModel(renderModel));
     }
 
     @Subscribe
@@ -87,40 +89,17 @@ class DancingNpcEffect
             return;
         }
 
-        if (!ensureReady())
-        {
-            return;
-        }
-
-        if (danceController != null)
-        {
-            danceController.tick(1);
-        }
-
+        animationTicks++;
         updatePosition();
     }
 
-    private boolean ensureReady()
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged event)
     {
-        if (baseModel == null)
+        if (event.getGameState() != GameState.LOGGED_IN)
         {
-            baseModel = loadNpcModel();
-            if (baseModel == null)
-            {
-                return false;
-            }
+            reset();
         }
-
-        if (danceController == null)
-        {
-            Animation danceAnimation = client.loadAnimation(DANCE_ANIMATION_ID);
-            if (danceAnimation != null)
-            {
-                danceController = new AnimationController(client, danceAnimation);
-            }
-        }
-
-        return true;
     }
 
     private Model loadNpcModel()
@@ -189,9 +168,10 @@ class DancingNpcEffect
             return;
         }
 
+        int plane = localPlayer.getWorldView().getPlane();
         int cameraYaw = client.getCameraYaw() & 2047;
         int depth = CameraSpaceProjection.depthForTargetScreenHeight(
-            baseModel.getModelHeight(),
+            APPROXIMATE_MODEL_HEIGHT,
             TARGET_SCREEN_HEIGHT,
             client.getScale()
         );
@@ -208,18 +188,21 @@ class DancingNpcEffect
             effectPoint,
             localPlayer.getWorldView().getId()
         );
+        int z = effectPoint.getZ();
 
         if (!effectLocation.isInScene())
         {
             effectLocation = playerLocation;
+            z = localPlayer.getWorldView().getTileHeight(playerLocation.getX(), playerLocation.getY(), plane);
         }
 
         modelState = new DancingNpcModelState(
-            baseModel,
+            null,
             effectLocation,
-            localPlayer.getWorldView().getPlane(),
-            effectPoint.getZ(),
-            cameraYaw
+            plane,
+            z,
+            -cameraYaw & 2047,
+            animationTicks
         );
     }
 
@@ -228,14 +211,77 @@ class DancingNpcEffect
         modelState = DancingNpcModelState.inactive();
     }
 
-    private Model getCurrentModel()
+    private void reset()
+    {
+        expiresAt = Instant.EPOCH;
+        animationTicks = 0;
+        baseModel = null;
+        danceAnimation = null;
+        deactivate();
+    }
+
+    private Model getRenderModel(int ticks)
     {
         if (baseModel == null)
         {
-            return null;
+            baseModel = loadNpcModel();
+            if (baseModel == null)
+            {
+                return null;
+            }
         }
 
-        return danceController == null ? baseModel : danceController.animate(baseModel);
+        if (danceAnimation == null)
+        {
+            danceAnimation = client.loadAnimation(DANCE_ANIMATION_ID);
+        }
+
+        if (danceAnimation == null)
+        {
+            return baseModel;
+        }
+
+        Model transformedModel = client.applyTransformations(
+            baseModel,
+            danceAnimation,
+            frameForTicks(danceAnimation, ticks),
+            null,
+            0
+        );
+        return transformedModel == null ? baseModel : transformedModel;
+    }
+
+    private static int frameForTicks(Animation animation, int ticks)
+    {
+        if (animation.isMayaAnim())
+        {
+            return ticks % Math.max(1, animation.getDuration());
+        }
+
+        int[] frameLengths = animation.getFrameLengths();
+        if (frameLengths == null || frameLengths.length == 0)
+        {
+            return 0;
+        }
+
+        int frame = 0;
+        int remainingTicks = Math.max(0, ticks);
+        int guard = 0;
+        while (remainingTicks > Math.max(1, frameLengths[frame]) && guard++ < frameLengths.length * 4)
+        {
+            remainingTicks -= Math.max(1, frameLengths[frame]);
+            frame++;
+            if (frame >= frameLengths.length)
+            {
+                frame -= animation.getFrameStep();
+                if (frame < 0 || frame >= frameLengths.length)
+                {
+                    frame = 0;
+                }
+            }
+        }
+
+        return frame;
     }
 
     static final class DancingNpcModelState
@@ -245,24 +291,26 @@ class DancingNpcEffect
         private final int plane;
         private final int z;
         private final int orientation;
+        private final int animationTicks;
 
-        private DancingNpcModelState(Model model, LocalPoint location, int plane, int z, int orientation)
+        private DancingNpcModelState(Model model, LocalPoint location, int plane, int z, int orientation, int animationTicks)
         {
             this.model = model;
             this.location = location;
             this.plane = plane;
             this.z = z;
             this.orientation = orientation;
+            this.animationTicks = animationTicks;
         }
 
         static DancingNpcModelState inactive()
         {
-            return new DancingNpcModelState(null, null, 0, 0, 0);
+            return new DancingNpcModelState(null, null, 0, 0, 0, 0);
         }
 
         boolean isActive()
         {
-            return model != null && location != null;
+            return location != null;
         }
 
         Model getModel()
@@ -290,9 +338,14 @@ class DancingNpcEffect
             return orientation;
         }
 
+        int getAnimationTicks()
+        {
+            return animationTicks;
+        }
+
         DancingNpcModelState withModel(Model model)
         {
-            return new DancingNpcModelState(model, location, plane, z, orientation);
+            return new DancingNpcModelState(model, location, plane, z, orientation, animationTicks);
         }
     }
 }

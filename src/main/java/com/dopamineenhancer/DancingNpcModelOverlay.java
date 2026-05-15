@@ -24,13 +24,7 @@ class DancingNpcModelOverlay extends Overlay
     @Override
     public Dimension render(Graphics2D graphics)
     {
-        DancingNpcEffect.DancingNpcModelState state = dancingNpcEffect.getModelState();
-        if (!state.isActive())
-        {
-            return null;
-        }
-
-        modelOverlayRenderer.render(graphics, state);
+        dancingNpcEffect.render(graphics, modelOverlayRenderer);
         return null;
     }
 }
