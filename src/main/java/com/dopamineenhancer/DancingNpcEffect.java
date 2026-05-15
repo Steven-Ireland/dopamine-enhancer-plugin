@@ -219,7 +219,7 @@ class DancingNpcEffect
             effectLocation,
             localPlayer.getWorldView().getPlane(),
             effectPoint.getZ(),
-            -cameraYaw & 2047
+            cameraYaw
         );
     }
 
