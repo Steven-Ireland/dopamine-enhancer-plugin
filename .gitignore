@@ -1,0 +1,19 @@
+.gradle/
+build/
+out/
+*.iml
+.idea/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Java/Gradle generated files
+*.class
+hs_err_pid*
+replay_pid*
+
+# RuneLite/local runtime state
+.runelite/
