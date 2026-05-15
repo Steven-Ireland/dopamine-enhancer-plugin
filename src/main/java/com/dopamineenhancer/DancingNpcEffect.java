@@ -5,13 +5,13 @@ import java.time.Instant;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Animation;
+import net.runelite.api.AnimationController;
 import net.runelite.api.Client;
 import net.runelite.api.Model;
 import net.runelite.api.ModelData;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.NpcID;
 import net.runelite.api.Player;
-import net.runelite.api.RuneLiteObject;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ClientTick;
 import net.runelite.api.gameval.AnimationID;
@@ -31,10 +31,10 @@ class DancingNpcEffect
     private final Client client;
     private final ClientThread clientThread;
 
-    private RuneLiteObject runeLiteObject;
-    private Model model;
-    private Animation danceAnimation;
+    private Model baseModel;
+    private AnimationController danceController;
     private Instant expiresAt = Instant.EPOCH;
+    private DancingNpcModelState modelState = DancingNpcModelState.inactive();
 
     @Inject
     DancingNpcEffect(Client client, ClientThread clientThread)
@@ -53,7 +53,11 @@ class DancingNpcEffect
                 return false;
             }
 
-            runeLiteObject.setActive(true);
+            if (danceController != null)
+            {
+                danceController.reset();
+            }
+
             updatePosition();
             return true;
         });
@@ -62,6 +66,16 @@ class DancingNpcEffect
     void shutDown()
     {
         clientThread.invoke(this::deactivate);
+    }
+
+    DancingNpcModelState getModelState()
+    {
+        if (modelState.isActive())
+        {
+            return modelState.withModel(getCurrentModel());
+        }
+
+        return modelState;
     }
 
     @Subscribe
@@ -78,36 +92,31 @@ class DancingNpcEffect
             return;
         }
 
-        runeLiteObject.setActive(true);
+        if (danceController != null)
+        {
+            danceController.tick(1);
+        }
+
         updatePosition();
     }
 
     private boolean ensureReady()
     {
-        if (runeLiteObject == null)
+        if (baseModel == null)
         {
-            runeLiteObject = client.createRuneLiteObject();
-            runeLiteObject.setShouldLoop(true);
-            runeLiteObject.setDrawFrontTilesFirst(true);
-        }
-
-        if (model == null)
-        {
-            model = loadNpcModel();
-            if (model == null)
+            baseModel = loadNpcModel();
+            if (baseModel == null)
             {
                 return false;
             }
-
-            runeLiteObject.setModel(model);
         }
 
-        if (danceAnimation == null)
+        if (danceController == null)
         {
-            danceAnimation = client.loadAnimation(DANCE_ANIMATION_ID);
+            Animation danceAnimation = client.loadAnimation(DANCE_ANIMATION_ID);
             if (danceAnimation != null)
             {
-                runeLiteObject.setAnimation(danceAnimation);
+                danceController = new AnimationController(client, danceAnimation);
             }
         }
 
@@ -182,7 +191,7 @@ class DancingNpcEffect
 
         int cameraYaw = client.getCameraYaw() & 2047;
         int depth = CameraSpaceProjection.depthForTargetScreenHeight(
-            model.getModelHeight(),
+            baseModel.getModelHeight(),
             TARGET_SCREEN_HEIGHT,
             client.getScale()
         );
@@ -205,16 +214,85 @@ class DancingNpcEffect
             effectLocation = playerLocation;
         }
 
-        runeLiteObject.setLocation(effectLocation, localPlayer.getWorldView().getPlane());
-        runeLiteObject.setZ(effectPoint.getZ());
-        runeLiteObject.setOrientation(-cameraYaw & 2047);
+        modelState = new DancingNpcModelState(
+            baseModel,
+            effectLocation,
+            localPlayer.getWorldView().getPlane(),
+            effectPoint.getZ(),
+            -cameraYaw & 2047
+        );
     }
 
     private void deactivate()
     {
-        if (runeLiteObject != null)
+        modelState = DancingNpcModelState.inactive();
+    }
+
+    private Model getCurrentModel()
+    {
+        if (baseModel == null)
         {
-            runeLiteObject.setActive(false);
+            return null;
+        }
+
+        return danceController == null ? baseModel : danceController.animate(baseModel);
+    }
+
+    static final class DancingNpcModelState
+    {
+        private final Model model;
+        private final LocalPoint location;
+        private final int plane;
+        private final int z;
+        private final int orientation;
+
+        private DancingNpcModelState(Model model, LocalPoint location, int plane, int z, int orientation)
+        {
+            this.model = model;
+            this.location = location;
+            this.plane = plane;
+            this.z = z;
+            this.orientation = orientation;
+        }
+
+        static DancingNpcModelState inactive()
+        {
+            return new DancingNpcModelState(null, null, 0, 0, 0);
+        }
+
+        boolean isActive()
+        {
+            return model != null && location != null;
+        }
+
+        Model getModel()
+        {
+            return model;
+        }
+
+        LocalPoint getLocation()
+        {
+            return location;
+        }
+
+        int getPlane()
+        {
+            return plane;
+        }
+
+        int getZ()
+        {
+            return z;
+        }
+
+        int getOrientation()
+        {
+            return orientation;
+        }
+
+        DancingNpcModelState withModel(Model model)
+        {
+            return new DancingNpcModelState(model, location, plane, z, orientation);
         }
     }
 }

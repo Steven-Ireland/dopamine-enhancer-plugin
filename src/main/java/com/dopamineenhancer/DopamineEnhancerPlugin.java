@@ -37,6 +37,9 @@ public class DopamineEnhancerPlugin extends Plugin
     private DopamineEnhancerOverlay overlay;
 
     @Inject
+    private DancingNpcModelOverlay dancingNpcModelOverlay;
+
+    @Inject
     private DancingNpcEffect dancingNpcEffect;
 
     @Inject
@@ -61,6 +64,7 @@ public class DopamineEnhancerPlugin extends Plugin
     {
         eventBus.register(triggers);
         eventBus.register(dancingNpcEffect);
+        overlayManager.add(dancingNpcModelOverlay);
         overlayManager.add(overlay);
         navigationButton = NavigationButton.builder()
             .tooltip("Dopamine Enhancer")
@@ -78,6 +82,7 @@ public class DopamineEnhancerPlugin extends Plugin
         eventBus.unregister(dancingNpcEffect);
         dancingNpcEffect.shutDown();
         overlayManager.remove(overlay);
+        overlayManager.remove(dancingNpcModelOverlay);
         clientToolbar.removeNavigation(navigationButton);
         navigationButton = null;
         log.debug("Dopamine Enhancer stopped");
