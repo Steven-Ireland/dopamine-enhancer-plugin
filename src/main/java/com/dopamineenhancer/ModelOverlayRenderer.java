@@ -5,6 +5,7 @@ import java.awt.Composite;
 import java.awt.Graphics2D;
 import java.awt.Polygon;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.Area;
 import java.util.ArrayList;
@@ -131,17 +132,7 @@ class ModelOverlayRenderer
         try
         {
             graphics.setClip(viewportClip);
-            for (Face face : faces)
-            {
-                graphics.setColor(face.color);
-                graphics.fillPolygon(
-                    new Polygon(
-                        new int[]{face.x1, face.x2, face.x3},
-                        new int[]{face.y1, face.y2, face.y3},
-                        3
-                    )
-                );
-            }
+            paintFaces(graphics, faces);
         }
         finally
         {
@@ -192,17 +183,7 @@ class ModelOverlayRenderer
         try
         {
             graphics.setClip(boxClip);
-            for (Face face : faces)
-            {
-                graphics.setColor(face.color);
-                graphics.fillPolygon(
-                    new Polygon(
-                        new int[]{face.x1, face.x2, face.x3},
-                        new int[]{face.y1, face.y2, face.y3},
-                        3
-                    )
-                );
-            }
+            paintFaces(graphics, faces);
         }
         finally
         {
@@ -515,6 +496,30 @@ class ModelOverlayRenderer
 
         faces.sort(Comparator.comparingDouble(Face::getDepth).reversed());
         return faces;
+    }
+
+    static void paintFaces(Graphics2D graphics, List<Face> faces)
+    {
+        RenderingHints previousHints = graphics.getRenderingHints();
+        try
+        {
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            for (Face face : faces)
+            {
+                graphics.setColor(face.color);
+                graphics.fillPolygon(
+                    new Polygon(
+                        new int[]{face.x1, face.x2, face.x3},
+                        new int[]{face.y1, face.y2, face.y3},
+                        3
+                    )
+                );
+            }
+        }
+        finally
+        {
+            graphics.setRenderingHints(previousHints);
+        }
     }
 
     private static boolean isValidVertex(int index, int[] canvasX, int[] canvasY, double[] cameraDepth)

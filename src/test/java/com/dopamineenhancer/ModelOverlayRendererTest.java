@@ -1,5 +1,10 @@
 package com.dopamineenhancer;
 
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
 
@@ -115,6 +120,27 @@ public class ModelOverlayRendererTest
         );
 
         assertTrue(faces.isEmpty());
+    }
+
+    @Test
+    public void adjacentFacesPaintWithoutTransparentSeams()
+    {
+        BufferedImage image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        ModelOverlayRenderer.paintFaces(graphics, Arrays.asList(
+            new ModelOverlayRenderer.Face(4, 4, 28, 4, 4, 28, 0, 0, 0, Color.RED, 1.0d),
+            new ModelOverlayRenderer.Face(28, 4, 28, 28, 4, 28, 0, 0, 0, Color.RED, 1.0d)
+        ));
+
+        assertEquals(RenderingHints.VALUE_ANTIALIAS_ON, graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING));
+        for (int coordinate = 8; coordinate <= 24; coordinate++)
+        {
+            assertEquals(255, new Color(image.getRGB(coordinate, coordinate), true).getAlpha());
+        }
+
+        graphics.dispose();
     }
 
     @Test
