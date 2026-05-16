@@ -32,6 +32,7 @@ class DancingNpcEffect
     private static final int APPROXIMATE_MODEL_HEIGHT = 240;
     private static final int TARGET_SCREEN_HEIGHT = 180;
     private static final int MODEL_PROJECTION_PITCH = 256;
+    private static final int HALF_TURN = 1024;
 
     private final Client client;
     private final ClientThread clientThread;
@@ -248,10 +249,15 @@ class DancingNpcEffect
             effectLocation,
             plane,
             z,
-            -cameraYaw & 2047,
+            facingCameraOrientation(cameraYaw),
             MODEL_PROJECTION_PITCH,
             animationTicks
         );
+    }
+
+    static int facingCameraOrientation(int cameraYaw)
+    {
+        return (-cameraYaw + HALF_TURN) & 2047;
     }
 
     private void deactivate()

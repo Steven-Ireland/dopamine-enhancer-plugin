@@ -26,7 +26,7 @@ class ModelOverlayRenderer
     private static final int FLAT_FACE_COLOR = -1;
     private static final int SKIPPED_FACE_COLOR = 12345678;
     private static final int MINIMUM_CAMERA_DEPTH = 50;
-    private static final int BOX_MODEL_ORIENTATION = 1024;
+    private static final int BOX_MODEL_ORIENTATION = 0;
     private static final double BOX_CAMERA_DEPTH = 2048.0d;
     private static final double BOX_VERTICAL_SCALE = 0.92d;
     private static final double BOX_DEPTH_TILT = 0.22d;

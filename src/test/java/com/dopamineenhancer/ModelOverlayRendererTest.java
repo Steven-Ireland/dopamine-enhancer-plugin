@@ -117,6 +117,15 @@ public class ModelOverlayRendererTest
         assertTrue(faces.isEmpty());
     }
 
+    @Test
+    public void npcFacesOppositeCameraDirection()
+    {
+        assertEquals(1024, DancingNpcEffect.facingCameraOrientation(0));
+        assertEquals(512, DancingNpcEffect.facingCameraOrientation(512));
+        assertEquals(0, DancingNpcEffect.facingCameraOrientation(1024));
+        assertEquals(1536, DancingNpcEffect.facingCameraOrientation(1536));
+    }
+
     private static List<ModelOverlayRenderer.Face> prepareFaces(
         int[] faceIndices1,
         int[] faceIndices2,
