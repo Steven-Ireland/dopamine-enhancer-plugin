@@ -79,8 +79,38 @@ final class CameraSpaceProjection
 
     static WorldPoint cameraSpaceToWorld(Client client, CameraSpacePoint point)
     {
-        int cameraYaw = client.getCameraYaw() & 2047;
-        int cameraPitch = client.getCameraPitch() & 2047;
+        return cameraSpaceToWorld(
+            client.getCameraX(),
+            client.getCameraY(),
+            client.getCameraZ(),
+            client.getCameraYaw(),
+            client.getCameraPitch(),
+            point
+        );
+    }
+
+    static WorldPoint cameraSpaceToWorldAtPitch(Client client, CameraSpacePoint point, int cameraPitch)
+    {
+        return cameraSpaceToWorld(
+            client.getCameraX(),
+            client.getCameraY(),
+            client.getCameraZ(),
+            client.getCameraYaw(),
+            cameraPitch,
+            point
+        );
+    }
+
+    static WorldPoint cameraSpaceToWorld(
+        int cameraX,
+        int cameraY,
+        int cameraZ,
+        int cameraYaw,
+        int cameraPitch,
+        CameraSpacePoint point)
+    {
+        cameraYaw &= 2047;
+        cameraPitch &= 2047;
         int pitchSin = Perspective.SINE[cameraPitch];
         int pitchCos = Perspective.COSINE[cameraPitch];
         int yawSin = Perspective.SINE[cameraYaw];
@@ -90,9 +120,9 @@ final class CameraSpaceProjection
         int cameraSpaceZ = (point.getY() * pitchCos + point.getZ() * pitchSin) >> 16;
 
         return new WorldPoint(
-            client.getCameraX() + ((point.getX() * yawCos - cameraSpaceY1 * yawSin) >> 16),
-            client.getCameraY() + ((point.getX() * yawSin + cameraSpaceY1 * yawCos) >> 16),
-            client.getCameraZ() + cameraSpaceZ
+            cameraX + ((point.getX() * yawCos - cameraSpaceY1 * yawSin) >> 16),
+            cameraY + ((point.getX() * yawSin + cameraSpaceY1 * yawCos) >> 16),
+            cameraZ + cameraSpaceZ
         );
     }
 

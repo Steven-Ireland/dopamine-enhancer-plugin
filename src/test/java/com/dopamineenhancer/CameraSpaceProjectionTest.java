@@ -3,6 +3,7 @@ package com.dopamineenhancer;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class CameraSpaceProjectionTest
 {
@@ -42,6 +43,34 @@ public class CameraSpaceProjectionTest
         int zoomed = CameraSpaceProjection.depthForTargetScreenHeight(240, 180, 1024);
 
         assertEquals(normal * 2, zoomed, 1);
+    }
+
+    @Test
+    public void zeroPitchProjectionKeepsCameraSpaceHeightUnrotated()
+    {
+        CameraSpaceProjection.CameraSpacePoint point =
+            new CameraSpaceProjection.CameraSpacePoint(-220, 80, 900);
+
+        CameraSpaceProjection.WorldPoint projection =
+            CameraSpaceProjection.cameraSpaceToWorld(1000, 2000, 300, 0, 0, point);
+
+        assertEquals(780, projection.getX());
+        assertEquals(2900, projection.getY());
+        assertEquals(380, projection.getZ());
+    }
+
+    @Test
+    public void pitchProjectionRotatesHeightIntoDepth()
+    {
+        CameraSpaceProjection.CameraSpacePoint point =
+            new CameraSpaceProjection.CameraSpacePoint(-220, 80, 900);
+
+        CameraSpaceProjection.WorldPoint projection =
+            CameraSpaceProjection.cameraSpaceToWorld(1000, 2000, 300, 0, 384, point);
+
+        assertEquals(780, projection.getX());
+        assertTrue(projection.getY() < 2900);
+        assertTrue(projection.getZ() > 380);
     }
 
     private static void assertRoundTrip(int screenX, int screenY, int depth, int scale)

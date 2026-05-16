@@ -26,10 +26,11 @@ class DancingNpcEffect
     private static final Duration EFFECT_DURATION = Duration.ofMillis(2600);
     private static final int NPC_ID = NpcID.PARTY_PETE;
     private static final int DANCE_ANIMATION_ID = AnimationID.EMOTE_PARTY_LOOP;
-    private static final int SCREEN_OFFSET_X = 220;
-    private static final int SCREEN_OFFSET_Y = -80;
+    private static final int SCREEN_OFFSET_X = -170;
+    private static final int SCREEN_OFFSET_Y = 0;
     private static final int APPROXIMATE_MODEL_HEIGHT = 240;
     private static final int TARGET_SCREEN_HEIGHT = 180;
+    private static final int MODEL_PROJECTION_PITCH = 256;
 
     private final Client client;
     private final ClientThread clientThread;
@@ -183,7 +184,7 @@ class DancingNpcEffect
                 client.getScale()
             );
         CameraSpaceProjection.WorldPoint effectPoint =
-            CameraSpaceProjection.cameraSpaceToWorld(client, cameraSpacePoint);
+            CameraSpaceProjection.cameraSpaceToWorldAtPitch(client, cameraSpacePoint, MODEL_PROJECTION_PITCH);
         LocalPoint effectLocation = CameraSpaceProjection.localPointForWorldPoint(
             effectPoint,
             localPlayer.getWorldView().getId()
@@ -202,6 +203,7 @@ class DancingNpcEffect
             plane,
             z,
             -cameraYaw & 2047,
+            MODEL_PROJECTION_PITCH,
             animationTicks
         );
     }
@@ -291,21 +293,30 @@ class DancingNpcEffect
         private final int plane;
         private final int z;
         private final int orientation;
+        private final int projectionPitch;
         private final int animationTicks;
 
-        private DancingNpcModelState(Model model, LocalPoint location, int plane, int z, int orientation, int animationTicks)
+        private DancingNpcModelState(
+            Model model,
+            LocalPoint location,
+            int plane,
+            int z,
+            int orientation,
+            int projectionPitch,
+            int animationTicks)
         {
             this.model = model;
             this.location = location;
             this.plane = plane;
             this.z = z;
             this.orientation = orientation;
+            this.projectionPitch = projectionPitch;
             this.animationTicks = animationTicks;
         }
 
         static DancingNpcModelState inactive()
         {
-            return new DancingNpcModelState(null, null, 0, 0, 0, 0);
+            return new DancingNpcModelState(null, null, 0, 0, 0, MODEL_PROJECTION_PITCH, 0);
         }
 
         boolean isActive()
@@ -338,6 +349,11 @@ class DancingNpcEffect
             return orientation;
         }
 
+        int getProjectionPitch()
+        {
+            return projectionPitch;
+        }
+
         int getAnimationTicks()
         {
             return animationTicks;
@@ -345,7 +361,7 @@ class DancingNpcEffect
 
         DancingNpcModelState withModel(Model model)
         {
-            return new DancingNpcModelState(model, location, plane, z, orientation, animationTicks);
+            return new DancingNpcModelState(model, location, plane, z, orientation, projectionPitch, animationTicks);
         }
     }
 }
