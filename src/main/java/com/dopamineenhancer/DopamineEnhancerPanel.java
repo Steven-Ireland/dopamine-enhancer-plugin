@@ -4,11 +4,13 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.List;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import javax.swing.border.EmptyBorder;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
@@ -19,6 +21,7 @@ class DopamineEnhancerPanel extends PluginPanel
 {
     private final ClientThread clientThread;
     private final CelebrationController celebrationController;
+    private final List<JToggleButton> toggleButtons = new ArrayList<>();
 
     @Inject
     DopamineEnhancerPanel(ClientThread clientThread, CelebrationController celebrationController)
@@ -36,19 +39,31 @@ class DopamineEnhancerPanel extends PluginPanel
         content.setBackground(ColorScheme.DARK_GRAY_COLOR);
         content.setBorder(new EmptyBorder(10, 0, 0, 0));
 
-        content.add(createPreviewButton("Preview quest", CelebrationType.QUEST));
-        content.add(createPreviewButton("Preview collection log", CelebrationType.COLLECTION_LOG));
-        content.add(createPreviewButton("Preview withdraw", CelebrationType.WITHDRAW));
+        content.add(createToggleButton("Toggle quest", CelebrationType.QUEST));
+        content.add(createToggleButton("Toggle collection log", CelebrationType.COLLECTION_LOG));
+        content.add(createToggleButton("Toggle withdraw", CelebrationType.WITHDRAW));
 
         add(title, BorderLayout.NORTH);
         add(content, BorderLayout.CENTER);
     }
 
-    private JButton createPreviewButton(String label, CelebrationType type)
+    private JToggleButton createToggleButton(String label, CelebrationType type)
     {
-        JButton button = new JButton(label);
+        JToggleButton button = new JToggleButton(label);
+        toggleButtons.add(button);
         button.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 32));
-        button.addActionListener(event -> clientThread.invoke(() -> celebrationController.celebrate(type)));
+        button.addActionListener(event ->
+        {
+            boolean selected = button.isSelected();
+            if (selected)
+            {
+                toggleButtons.stream()
+                    .filter(toggleButton -> toggleButton != button)
+                    .forEach(toggleButton -> toggleButton.setSelected(false));
+            }
+
+            clientThread.invoke(() -> celebrationController.toggle(type, selected));
+        });
         return button;
     }
 }

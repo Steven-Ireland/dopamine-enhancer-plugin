@@ -26,6 +26,10 @@ class ModelOverlayRenderer
     private static final int FLAT_FACE_COLOR = -1;
     private static final int SKIPPED_FACE_COLOR = 12345678;
     private static final int MINIMUM_CAMERA_DEPTH = 50;
+    private static final int BOX_MODEL_ORIENTATION = 1024;
+    private static final double BOX_CAMERA_DEPTH = 2048.0d;
+    private static final double BOX_VERTICAL_SCALE = 0.92d;
+    private static final double BOX_DEPTH_TILT = 0.22d;
 
     private final Client client;
 
@@ -143,6 +147,66 @@ class ModelOverlayRenderer
         {
             graphics.setClip(previousClip);
             graphics.setComposite(previousComposite);
+        }
+    }
+
+    void renderInBox(Graphics2D graphics, Model model, Rectangle bounds)
+    {
+        if (model == null || bounds.width <= 0 || bounds.height <= 0)
+        {
+            return;
+        }
+
+        int vertices = model.getVerticesCount();
+        int[] canvasX = new int[vertices];
+        int[] canvasY = new int[vertices];
+        double[] cameraDepth = new double[vertices];
+        projectModelToBox(model, bounds, canvasX, canvasY, cameraDepth);
+
+        List<Face> faces = prepareFaces(
+            model.getFaceIndices1(),
+            model.getFaceIndices2(),
+            model.getFaceIndices3(),
+            model.getFaceColors1(),
+            model.getFaceColors2(),
+            model.getFaceColors3(),
+            model.getFaceTransparencies(),
+            canvasX,
+            canvasY,
+            cameraDepth,
+            model.getFaceCount()
+        );
+
+        if (faces.isEmpty())
+        {
+            return;
+        }
+
+        Shape previousClip = graphics.getClip();
+        Area boxClip = new Area(bounds);
+        if (previousClip != null)
+        {
+            boxClip.intersect(new Area(previousClip));
+        }
+
+        try
+        {
+            graphics.setClip(boxClip);
+            for (Face face : faces)
+            {
+                graphics.setColor(face.color);
+                graphics.fillPolygon(
+                    new Polygon(
+                        new int[]{face.x1, face.x2, face.x3},
+                        new int[]{face.y1, face.y2, face.y3},
+                        3
+                    )
+                );
+            }
+        }
+        finally
+        {
+            graphics.setClip(previousClip);
         }
     }
 
@@ -308,6 +372,69 @@ class ModelOverlayRenderer
         }
 
         return depths;
+    }
+
+    private static void projectModelToBox(
+        Model model,
+        Rectangle bounds,
+        int[] canvasX,
+        int[] canvasY,
+        double[] cameraDepth)
+    {
+        float rotateSin = Perspective.SINE[BOX_MODEL_ORIENTATION & 2047] / 65536.0f;
+        float rotateCos = Perspective.COSINE[BOX_MODEL_ORIENTATION & 2047] / 65536.0f;
+        float[] verticesX = model.getVerticesX();
+        float[] verticesY = model.getVerticesZ();
+        float[] verticesZ = model.getVerticesY();
+        double[] projectedX = new double[canvasX.length];
+        double[] projectedY = new double[canvasY.length];
+
+        double minX = Double.POSITIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+
+        for (int i = 0; i < canvasX.length; i++)
+        {
+            float x = verticesX[i];
+            float y = verticesY[i];
+            float height = verticesZ[i];
+            float rotatedX = x * rotateCos + y * rotateSin;
+            float rotatedY = y * rotateCos - x * rotateSin;
+            double screenX = rotatedX;
+            double screenY = height * BOX_VERTICAL_SCALE - rotatedY * BOX_DEPTH_TILT;
+
+            projectedX[i] = screenX;
+            projectedY[i] = screenY;
+            cameraDepth[i] = BOX_CAMERA_DEPTH + rotatedY;
+            minX = Math.min(minX, screenX);
+            minY = Math.min(minY, screenY);
+            maxX = Math.max(maxX, screenX);
+            maxY = Math.max(maxY, screenY);
+        }
+
+        double projectedWidth = maxX - minX;
+        double projectedHeight = maxY - minY;
+        if (projectedWidth <= 0.0d || projectedHeight <= 0.0d)
+        {
+            for (int i = 0; i < canvasX.length; i++)
+            {
+                canvasX[i] = Integer.MIN_VALUE;
+                canvasY[i] = Integer.MIN_VALUE;
+                cameraDepth[i] = Double.NEGATIVE_INFINITY;
+            }
+            return;
+        }
+
+        double scale = Math.min(bounds.width / projectedWidth, bounds.height / projectedHeight);
+        double offsetX = bounds.x + (bounds.width - projectedWidth * scale) / 2.0d - minX * scale;
+        double offsetY = bounds.y + (bounds.height - projectedHeight * scale) / 2.0d - minY * scale;
+
+        for (int i = 0; i < canvasX.length; i++)
+        {
+            canvasX[i] = (int) Math.round(offsetX + projectedX[i] * scale);
+            canvasY[i] = (int) Math.round(offsetY + projectedY[i] * scale);
+        }
     }
 
     static List<Face> prepareFaces(

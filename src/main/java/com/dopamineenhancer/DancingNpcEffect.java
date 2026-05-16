@@ -1,6 +1,7 @@
 package com.dopamineenhancer;
 
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.time.Duration;
 import java.time.Instant;
 import javax.inject.Inject;
@@ -59,6 +60,29 @@ class DancingNpcEffect
         });
     }
 
+    void toggle(boolean enabled)
+    {
+        if (!enabled)
+        {
+            expiresAt = Instant.EPOCH;
+            animationTicks = 0;
+            clientThread.invoke(() ->
+            {
+                deactivate();
+                return true;
+            });
+            return;
+        }
+
+        expiresAt = Instant.MAX;
+        animationTicks = 0;
+        clientThread.invoke(() ->
+        {
+            updatePosition();
+            return true;
+        });
+    }
+
     void shutDown()
     {
         clientThread.invoke(this::reset);
@@ -79,6 +103,28 @@ class DancingNpcEffect
         }
 
         modelOverlayRenderer.render(graphics, state.withModel(renderModel));
+    }
+
+    void render(Graphics2D graphics, ModelOverlayRenderer modelOverlayRenderer, Rectangle bounds)
+    {
+        DancingNpcModelState state = modelState;
+        if (!state.isActive())
+        {
+            return;
+        }
+
+        Model renderModel = getRenderModel(state.getAnimationTicks());
+        if (renderModel == null)
+        {
+            return;
+        }
+
+        modelOverlayRenderer.renderInBox(graphics, renderModel, bounds);
+    }
+
+    boolean isActive()
+    {
+        return modelState.isActive();
     }
 
     @Subscribe
