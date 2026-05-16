@@ -44,30 +44,6 @@ public class CelebrationController
         }
     }
 
-    void toggle(CelebrationType type, boolean enabled)
-    {
-        if (!enabled)
-        {
-            dancingNpcEffect.toggle(false);
-            return;
-        }
-
-        if (config.soundEffects())
-        {
-            client.playSoundEffect(soundId(type));
-        }
-
-        if (config.overlayEffects())
-        {
-            overlay.show(type.getDefaultMessage());
-        }
-
-        if (config.dancingNpcEffect())
-        {
-            dancingNpcEffect.toggle(true);
-        }
-    }
-
     private int soundId(CelebrationType type)
     {
         switch (type)

@@ -33,17 +33,18 @@ class DancingNpcModelOverlay extends Overlay
     public Dimension render(Graphics2D graphics)
     {
         Dimension size = getPreferredSize() == null ? DEFAULT_SIZE : getPreferredSize();
-        if (dancingNpcEffect.isActive())
+        if (!dancingNpcEffect.isActive())
         {
-            Rectangle contentBounds = new Rectangle(
-                PADDING,
-                PADDING,
-                Math.max(1, size.width - PADDING * 2),
-                Math.max(1, size.height - PADDING * 2)
-            );
-            dancingNpcEffect.render(graphics, modelOverlayRenderer, contentBounds);
+            return null;
         }
 
+        Rectangle contentBounds = new Rectangle(
+            PADDING,
+            PADDING,
+            Math.max(1, size.width - PADDING * 2),
+            Math.max(1, size.height - PADDING * 2)
+        );
+        dancingNpcEffect.render(graphics, modelOverlayRenderer, contentBounds);
         return size;
     }
 }

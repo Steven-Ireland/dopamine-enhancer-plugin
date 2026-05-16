@@ -75,10 +75,21 @@ public interface DopamineEnhancerConfig extends Config
     }
 
     @ConfigItem(
+        keyName = "dancingNpcOnlyOnTriggers",
+        name = "Only show on triggers",
+        description = "Only show the NPC while a celebration trigger is active",
+        position = 6
+    )
+    default boolean dancingNpcOnlyOnTriggers()
+    {
+        return false;
+    }
+
+    @ConfigItem(
         keyName = "questSoundId",
         name = "Quest sound ID",
         description = "RuneLite sound effect ID for quest completions",
-        position = 6
+        position = 7
     )
     default int questSoundId()
     {
@@ -89,7 +100,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "collectionLogSoundId",
         name = "Collection log sound ID",
         description = "RuneLite sound effect ID for collection log entries",
-        position = 7
+        position = 8
     )
     default int collectionLogSoundId()
     {
@@ -100,7 +111,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "withdrawSoundId",
         name = "Withdraw sound ID",
         description = "RuneLite sound effect ID for withdraw actions",
-        position = 8
+        position = 9
     )
     default int withdrawSoundId()
     {
