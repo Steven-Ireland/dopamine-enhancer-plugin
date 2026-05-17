@@ -66,7 +66,7 @@ public interface DopamineEnhancerConfig extends Config
     @ConfigItem(
         keyName = "dancingNpcEffect",
         name = "Dancing NPC",
-        description = "Show a dancing NPC celebration near the camera",
+        description = "Show a dancing NPC during celebrations",
         position = 5
     )
     default boolean dancingNpcEffect()
@@ -75,14 +75,14 @@ public interface DopamineEnhancerConfig extends Config
     }
 
     @ConfigItem(
-        keyName = "dancingNpcOnlyOnTriggers",
-        name = "Only show on triggers",
-        description = "Only show the NPC while a celebration trigger is active",
+        keyName = "dancingNpcAnimation",
+        name = "NPC animation",
+        description = "Animation to loop during dancing NPC celebrations",
         position = 6
     )
-    default boolean dancingNpcOnlyOnTriggers()
+    default DancingNpcAnimation dancingNpcAnimation()
     {
-        return false;
+        return DancingNpcAnimation.DANCE;
     }
 
     @ConfigItem(

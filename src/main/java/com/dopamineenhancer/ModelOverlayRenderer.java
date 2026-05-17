@@ -9,6 +9,7 @@ import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.Area;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import javax.inject.Inject;
@@ -31,6 +32,8 @@ class ModelOverlayRenderer
     private static final double BOX_CAMERA_DEPTH = 2048.0d;
     private static final double BOX_VERTICAL_SCALE = 0.92d;
     private static final double BOX_DEPTH_TILT = 0.22d;
+    private static final int MINIMUM_ROBUST_BOUND_VERTICES = 10;
+    private static final double ROBUST_BOUND_OUTLIER_GAP_RATIO = 0.08d;
 
     private final Client client;
 
@@ -143,6 +146,11 @@ class ModelOverlayRenderer
 
     void renderInBox(Graphics2D graphics, Model model, Rectangle bounds)
     {
+        renderInBox(graphics, model, bounds, bounds);
+    }
+
+    void renderInBox(Graphics2D graphics, Model model, Rectangle bounds, Rectangle scaleBounds)
+    {
         if (model == null || bounds.width <= 0 || bounds.height <= 0)
         {
             return;
@@ -152,7 +160,7 @@ class ModelOverlayRenderer
         int[] canvasX = new int[vertices];
         int[] canvasY = new int[vertices];
         double[] cameraDepth = new double[vertices];
-        projectModelToBox(model, bounds, canvasX, canvasY, cameraDepth);
+        projectModelToBox(model, bounds, scaleBounds, canvasX, canvasY, cameraDepth);
 
         List<Face> faces = prepareFaces(
             model.getFaceIndices1(),
@@ -355,9 +363,20 @@ class ModelOverlayRenderer
         return depths;
     }
 
-    private static void projectModelToBox(
+    static void projectModelToBox(
         Model model,
         Rectangle bounds,
+        int[] canvasX,
+        int[] canvasY,
+        double[] cameraDepth)
+    {
+        projectModelToBox(model, bounds, bounds, canvasX, canvasY, cameraDepth);
+    }
+
+    static void projectModelToBox(
+        Model model,
+        Rectangle bounds,
+        Rectangle scaleBounds,
         int[] canvasX,
         int[] canvasY,
         double[] cameraDepth)
@@ -370,10 +389,10 @@ class ModelOverlayRenderer
         double[] projectedX = new double[canvasX.length];
         double[] projectedY = new double[canvasY.length];
 
+        boolean[] boundsVertices = visibleBoundsVertices(model, canvasX.length);
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY;
-        double maxY = Double.NEGATIVE_INFINITY;
 
         for (int i = 0; i < canvasX.length; i++)
         {
@@ -388,12 +407,15 @@ class ModelOverlayRenderer
             projectedX[i] = screenX;
             projectedY[i] = screenY;
             cameraDepth[i] = BOX_CAMERA_DEPTH + rotatedY;
-            minX = Math.min(minX, screenX);
-            minY = Math.min(minY, screenY);
-            maxX = Math.max(maxX, screenX);
-            maxY = Math.max(maxY, screenY);
+            if (boundsVertices[i])
+            {
+                minX = Math.min(minX, screenX);
+                minY = Math.min(minY, screenY);
+                maxX = Math.max(maxX, screenX);
+            }
         }
 
+        double maxY = robustMaximum(projectedY, boundsVertices);
         double projectedWidth = maxX - minX;
         double projectedHeight = maxY - minY;
         if (projectedWidth <= 0.0d || projectedHeight <= 0.0d)
@@ -407,15 +429,113 @@ class ModelOverlayRenderer
             return;
         }
 
-        double scale = Math.min(bounds.width / projectedWidth, bounds.height / projectedHeight);
+        Rectangle effectiveScaleBounds = scaleBounds == null ? bounds : scaleBounds;
+        double scale = Math.min(effectiveScaleBounds.width / projectedWidth, effectiveScaleBounds.height / projectedHeight);
         double offsetX = bounds.x + (bounds.width - projectedWidth * scale) / 2.0d - minX * scale;
-        double offsetY = bounds.y + (bounds.height - projectedHeight * scale) / 2.0d - minY * scale;
+        double offsetY = bounds.y + bounds.height - maxY * scale;
 
         for (int i = 0; i < canvasX.length; i++)
         {
             canvasX[i] = (int) Math.round(offsetX + projectedX[i] * scale);
             canvasY[i] = (int) Math.round(offsetY + projectedY[i] * scale);
         }
+    }
+
+    private static boolean[] visibleBoundsVertices(Model model, int vertexCount)
+    {
+        boolean[] vertices = new boolean[vertexCount];
+        int faceCount = model.getFaceCount();
+        int[] faceIndices1 = model.getFaceIndices1();
+        int[] faceIndices2 = model.getFaceIndices2();
+        int[] faceIndices3 = model.getFaceIndices3();
+        int[] faceColors1 = model.getFaceColors1();
+        int[] faceColors2 = model.getFaceColors2();
+        int[] faceColors3 = model.getFaceColors3();
+        if (faceCount <= 0 || faceIndices1 == null || faceIndices2 == null || faceIndices3 == null
+            || faceColors1 == null || faceColors2 == null || faceColors3 == null)
+        {
+            Arrays.fill(vertices, true);
+            return vertices;
+        }
+
+        int safeFaceCount = Math.min(faceCount, minLength(
+            faceIndices1,
+            faceIndices2,
+            faceIndices3,
+            faceColors1,
+            faceColors2,
+            faceColors3
+        ));
+        byte[] faceTransparencies = model.getFaceTransparencies();
+        int markedVertices = 0;
+        for (int faceIndex = 0; faceIndex < safeFaceCount; faceIndex++)
+        {
+            if (faceColors3[faceIndex] == HIDDEN_FACE_COLOR
+                || faceColors1[faceIndex] == SKIPPED_FACE_COLOR
+                || isFullyTransparent(faceTransparencies, faceIndex))
+            {
+                continue;
+            }
+
+            markedVertices += markBoundsVertex(vertices, faceIndices1[faceIndex]);
+            markedVertices += markBoundsVertex(vertices, faceIndices2[faceIndex]);
+            markedVertices += markBoundsVertex(vertices, faceIndices3[faceIndex]);
+        }
+
+        if (markedVertices == 0)
+        {
+            Arrays.fill(vertices, true);
+        }
+
+        return vertices;
+    }
+
+    private static int markBoundsVertex(boolean[] vertices, int index)
+    {
+        if (index < 0 || index >= vertices.length || vertices[index])
+        {
+            return 0;
+        }
+
+        vertices[index] = true;
+        return 1;
+    }
+
+    private static double robustMaximum(double[] values, boolean[] included)
+    {
+        double[] includedValues = new double[values.length];
+        int includedCount = 0;
+        for (int i = 0; i < values.length; i++)
+        {
+            if (included[i])
+            {
+                includedValues[includedCount++] = values[i];
+            }
+        }
+
+        if (includedCount == 0)
+        {
+            return Double.NEGATIVE_INFINITY;
+        }
+
+        Arrays.sort(includedValues, 0, includedCount);
+        double maximum = includedValues[includedCount - 1];
+        if (includedCount < MINIMUM_ROBUST_BOUND_VERTICES)
+        {
+            return maximum;
+        }
+
+        int fallbackIndex = includedCount - 1 - Math.max(1, includedCount / 100);
+        double fallbackMaximum = includedValues[fallbackIndex];
+        double range = maximum - includedValues[0];
+        if (range <= 0.0d)
+        {
+            return maximum;
+        }
+
+        return maximum - fallbackMaximum > range * ROBUST_BOUND_OUTLIER_GAP_RATIO
+            ? fallbackMaximum
+            : maximum;
     }
 
     static List<Face> prepareFaces(

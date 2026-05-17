@@ -2,9 +2,10 @@ package com.dopamineenhancer;
 
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Animation;
@@ -18,36 +19,14 @@ import net.runelite.api.Player;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ClientTick;
 import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.gameval.AnimationID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
 
 @Singleton
 class DancingNpcEffect
 {
-    private static final int CELEBRATION_ANIMATION_COUNT = 3;
-    private static final int MIN_IDLE_CYCLE_TICKS = 95;
-    private static final int MAX_IDLE_CYCLE_TICKS = 105;
+    private static final Duration CELEBRATION_DURATION = Duration.ofSeconds(10);
     private static final int NPC_ID = NpcID.PARTY_PETE;
-    private static final int READY_ANIMATION_ID = AnimationID.HUMAN_READY_LOOP;
-    private static final int[] IDLE_ANIMATION_IDS = {
-        AnimationID.EMOTE_THINK_LOOP,
-        AnimationID.EMOTE_SIT_LOOP,
-        AnimationID.EMOTE_MIME_LEAN_LOOP,
-        AnimationID.EMOTE_YAWN_LOOP,
-        AnimationID.EMOTE_SLAP_HEAD_LOOP
-    };
-    private static final int[] CELEBRATION_ANIMATION_IDS = {
-        AnimationID.EMOTE_DANCE_LOOP,
-        AnimationID.FRIS_HUMAN_JIG,
-        AnimationID.EMOTE_DANCE_HEADBANG_LOOP,
-        AnimationID.EMOTE_CLAP_LOOP,
-        AnimationID.HUMAN_CAVE_GOBLIN_BOW_LOOP,
-        AnimationID.EMOTE_BOW_LOOP,
-        AnimationID.EMOTE_PANIC_FLAP_LOOP,
-        AnimationID.EMOTE_FLEX_LOOP
-    };
     private static final int SCREEN_OFFSET_X = -170;
     private static final int SCREEN_OFFSET_Y = 0;
     private static final int APPROXIMATE_MODEL_HEIGHT = 240;
@@ -62,14 +41,8 @@ class DancingNpcEffect
     private Model baseModel;
     private final Map<Integer, Animation> animationCache = new HashMap<>();
     private volatile int animationTicks;
-    private int idleAnimationIndex = -1;
-    private int idleCycleTicksRemaining = randomIdleCycleTicks();
-    private int currentAnimationId = READY_ANIMATION_ID;
-    private boolean currentAnimationLoops = true;
-    private boolean celebrating;
-    private boolean playingIdleAnimation;
-    private int celebrationAnimationIndex;
-    private final int[] currentCelebrationAnimationIds = new int[CELEBRATION_ANIMATION_COUNT];
+    private int currentAnimationId = DancingNpcAnimation.DANCE.getAnimationId();
+    private Instant expiresAt = Instant.EPOCH;
     private DancingNpcModelState modelState = DancingNpcModelState.inactive();
 
     @Inject
@@ -82,7 +55,7 @@ class DancingNpcEffect
 
     void show()
     {
-        startDance();
+        startCelebration();
         clientThread.invoke(() ->
         {
             updatePosition();
@@ -114,6 +87,11 @@ class DancingNpcEffect
 
     void render(Graphics2D graphics, ModelOverlayRenderer modelOverlayRenderer, Rectangle bounds)
     {
+        render(graphics, modelOverlayRenderer, bounds, bounds);
+    }
+
+    void render(Graphics2D graphics, ModelOverlayRenderer modelOverlayRenderer, Rectangle bounds, Rectangle scaleBounds)
+    {
         DancingNpcModelState state = modelState;
         if (!state.isActive())
         {
@@ -126,12 +104,12 @@ class DancingNpcEffect
             return;
         }
 
-        modelOverlayRenderer.renderInBox(graphics, renderModel, bounds);
+        modelOverlayRenderer.renderInBox(graphics, renderModel, bounds, scaleBounds);
     }
 
     boolean isActive()
     {
-        return modelState.isActive();
+        return modelState.isActive() && isCelebrating();
     }
 
     @Subscribe
@@ -143,27 +121,15 @@ class DancingNpcEffect
             return;
         }
 
-        animationTicks++;
-        updateAnimationPlayback();
-
-        if (config.dancingNpcOnlyOnTriggers() && !isCelebrating())
+        if (!isCelebrating())
         {
             deactivate();
             return;
         }
 
+        animationTicks++;
+        switchAnimation(selectedAnimationId());
         updatePosition();
-    }
-
-    @Subscribe
-    public void onGameTick(GameTick event)
-    {
-        if (!config.dancingNpcEffect())
-        {
-            return;
-        }
-
-        updateAnimationState();
     }
 
     @Subscribe
@@ -278,7 +244,7 @@ class DancingNpcEffect
             MODEL_PROJECTION_PITCH,
             animationTicks,
             currentAnimationId,
-            currentAnimationLoops
+            true
         );
     }
 
@@ -294,133 +260,41 @@ class DancingNpcEffect
 
     private void reset()
     {
-        celebrating = false;
-        playingIdleAnimation = false;
-        celebrationAnimationIndex = 0;
+        expiresAt = Instant.EPOCH;
         animationTicks = 0;
-        idleAnimationIndex = -1;
-        idleCycleTicksRemaining = randomIdleCycleTicks();
-        currentAnimationId = READY_ANIMATION_ID;
-        currentAnimationLoops = true;
+        currentAnimationId = DancingNpcAnimation.DANCE.getAnimationId();
         baseModel = null;
         animationCache.clear();
         deactivate();
     }
 
-    private void startDance()
+    private void startCelebration()
     {
-        celebrating = true;
-        playingIdleAnimation = false;
-        celebrationAnimationIndex = 0;
-        selectCelebrationAnimations();
-        switchAnimation(currentCelebrationAnimationIds[celebrationAnimationIndex], false);
+        expiresAt = Instant.now().plus(CELEBRATION_DURATION);
+        currentAnimationId = selectedAnimationId();
+        animationTicks = 0;
     }
 
-    private void stopDance()
+    private void switchAnimation(int animationId)
     {
-        celebrating = false;
-        celebrationAnimationIndex = 0;
-        idleCycleTicksRemaining = randomIdleCycleTicks();
-        switchToReady();
-    }
-
-    private void updateAnimationState()
-    {
-        if (isCelebrating())
-        {
-            return;
-        }
-
-        idleCycleTicksRemaining--;
-        if (idleCycleTicksRemaining > 0)
-        {
-            return;
-        }
-
-        idleAnimationIndex = (idleAnimationIndex + 1) % IDLE_ANIMATION_IDS.length;
-        idleCycleTicksRemaining = randomIdleCycleTicks();
-        playingIdleAnimation = true;
-        int animationId = IDLE_ANIMATION_IDS[idleAnimationIndex];
-        switchAnimation(animationId, isPersistentIdleAnimation(animationId));
-    }
-
-    private void updateAnimationPlayback()
-    {
-        if (currentAnimationLoops || !animationFinished(currentAnimationId, animationTicks))
-        {
-            return;
-        }
-
-        if (isCelebrating())
-        {
-            updateCelebrationAnimation();
-            return;
-        }
-
-        if (playingIdleAnimation)
-        {
-            playingIdleAnimation = false;
-            switchToReady();
-        }
-    }
-
-    private void switchToReady()
-    {
-        switchAnimation(READY_ANIMATION_ID, true);
-    }
-
-    private void switchAnimation(int animationId, boolean loops)
-    {
-        if (currentAnimationId == animationId && currentAnimationLoops == loops)
+        if (currentAnimationId == animationId)
         {
             return;
         }
 
         currentAnimationId = animationId;
-        currentAnimationLoops = loops;
         animationTicks = 0;
     }
 
     private boolean isCelebrating()
     {
-        return celebrating;
+        return Instant.now().isBefore(expiresAt);
     }
 
-    private void updateCelebrationAnimation()
+    private int selectedAnimationId()
     {
-        celebrationAnimationIndex++;
-        if (celebrationAnimationIndex >= CELEBRATION_ANIMATION_COUNT)
-        {
-            stopDance();
-            return;
-        }
-
-        switchAnimation(currentCelebrationAnimationIds[celebrationAnimationIndex], false);
-    }
-
-    private void selectCelebrationAnimations()
-    {
-        int[] candidates = CELEBRATION_ANIMATION_IDS.clone();
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int i = candidates.length - 1; i > 0; i--)
-        {
-            int swapIndex = random.nextInt(i + 1);
-            int candidate = candidates[i];
-            candidates[i] = candidates[swapIndex];
-            candidates[swapIndex] = candidate;
-        }
-
-        System.arraycopy(candidates, 0, currentCelebrationAnimationIds, 0, CELEBRATION_ANIMATION_COUNT);
-    }
-
-    private static boolean isPersistentIdleAnimation(int animationId)
-    {
-        return animationId == AnimationID.EMOTE_SIT_LOOP || animationId == AnimationID.EMOTE_MIME_LEAN_LOOP;
-    }
-
-    private static int randomIdleCycleTicks()
-    {
-        return ThreadLocalRandom.current().nextInt(MIN_IDLE_CYCLE_TICKS, MAX_IDLE_CYCLE_TICKS + 1);
+        DancingNpcAnimation animation = config.dancingNpcAnimation();
+        return animation == null ? DancingNpcAnimation.DANCE.getAnimationId() : animation.getAnimationId();
     }
 
     private Model getRenderModel(int ticks, int animationId, boolean animationLoops)
@@ -450,13 +324,7 @@ class DancingNpcEffect
         return transformedModel == null ? baseModel : transformedModel;
     }
 
-    private boolean animationFinished(int animationId, int ticks)
-    {
-        Animation animation = animationCache.computeIfAbsent(animationId, client::loadAnimation);
-        return animation == null || ticks >= animationDurationTicks(animation);
-    }
-
-    private static int frameForTicks(Animation animation, int ticks, boolean loop)
+    static int frameForTicks(Animation animation, int ticks, boolean loop)
     {
         if (animation.isMayaAnim())
         {
@@ -475,7 +343,7 @@ class DancingNpcEffect
         int duration = animationDurationTicks(animation);
         remainingTicks = loop ? remainingTicks % duration : Math.min(remainingTicks, duration - 1);
         int guard = 0;
-        while (remainingTicks > Math.max(1, frameLengths[frame]) && guard++ < frameLengths.length * 4)
+        while (remainingTicks >= Math.max(1, frameLengths[frame]) && guard++ < frameLengths.length * 4)
         {
             remainingTicks -= Math.max(1, frameLengths[frame]);
             frame++;
@@ -555,7 +423,17 @@ class DancingNpcEffect
 
         static DancingNpcModelState inactive()
         {
-            return new DancingNpcModelState(null, null, 0, 0, 0, MODEL_PROJECTION_PITCH, 0, READY_ANIMATION_ID, true);
+            return new DancingNpcModelState(
+                null,
+                null,
+                0,
+                0,
+                0,
+                MODEL_PROJECTION_PITCH,
+                0,
+                DancingNpcAnimation.DANCE.getAnimationId(),
+                true
+            );
         }
 
         boolean isActive()

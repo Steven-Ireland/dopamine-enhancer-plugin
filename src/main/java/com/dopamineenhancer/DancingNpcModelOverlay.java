@@ -11,8 +11,8 @@ import net.runelite.client.ui.overlay.components.ComponentConstants;
 
 class DancingNpcModelOverlay extends Overlay
 {
-    private static final Dimension DEFAULT_SIZE = new Dimension(110, 140);
-    private static final int PADDING = ComponentConstants.STANDARD_BORDER;
+    static final Dimension DEFAULT_SIZE = new Dimension(110, 140);
+    static final int PADDING = ComponentConstants.STANDARD_BORDER;
 
     private final DancingNpcEffect dancingNpcEffect;
     private final ModelOverlayRenderer modelOverlayRenderer;
@@ -44,7 +44,17 @@ class DancingNpcModelOverlay extends Overlay
             Math.max(1, size.width - PADDING * 2),
             Math.max(1, size.height - PADDING * 2)
         );
-        dancingNpcEffect.render(graphics, modelOverlayRenderer, contentBounds);
+        dancingNpcEffect.render(graphics, modelOverlayRenderer, contentBounds, defaultContentBounds());
         return size;
+    }
+
+    static Rectangle defaultContentBounds()
+    {
+        return new Rectangle(
+            PADDING,
+            PADDING,
+            Math.max(1, DEFAULT_SIZE.width - PADDING * 2),
+            Math.max(1, DEFAULT_SIZE.height - PADDING * 2)
+        );
     }
 }
