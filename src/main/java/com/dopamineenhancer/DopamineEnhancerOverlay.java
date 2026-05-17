@@ -19,12 +19,16 @@ class DopamineEnhancerOverlay extends Overlay
 {
     private static final Duration EFFECT_DURATION = Duration.ofMillis(1800);
 
+    private final DopamineEnhancerConfig config;
+    private final ConfettiCannonEffect confettiCannonEffect;
     private Instant expiresAt = Instant.EPOCH;
     private String message = "";
 
     @Inject
-    DopamineEnhancerOverlay()
+    DopamineEnhancerOverlay(DopamineEnhancerConfig config, ConfettiCannonEffect confettiCannonEffect)
     {
+        this.config = config;
+        this.confettiCannonEffect = confettiCannonEffect;
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ALWAYS_ON_TOP);
     }
@@ -39,7 +43,23 @@ class DopamineEnhancerOverlay extends Overlay
     public Dimension render(Graphics2D graphics)
     {
         Instant now = Instant.now();
-        if (!now.isBefore(expiresAt))
+        boolean textActive = now.isBefore(expiresAt);
+        Rectangle bounds = graphics.getClipBounds();
+        if (bounds == null)
+        {
+            return null;
+        }
+
+        if (config.confettiCannon())
+        {
+            confettiCannonEffect.render(graphics, bounds);
+        }
+        else
+        {
+            confettiCannonEffect.clear();
+        }
+
+        if (!textActive)
         {
             return null;
         }
@@ -49,12 +69,6 @@ class DopamineEnhancerOverlay extends Overlay
 
         Font previousFont = graphics.getFont();
         Composite previousComposite = graphics.getComposite();
-        Rectangle bounds = graphics.getClipBounds();
-        if (bounds == null)
-        {
-            return null;
-        }
-
         graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, opacity));
         graphics.setFont(previousFont.deriveFont(Font.BOLD, 28f));
 

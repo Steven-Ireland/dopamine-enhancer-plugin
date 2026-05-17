@@ -11,19 +11,22 @@ public class CelebrationController
     private final DopamineEnhancerConfig config;
     private final DopamineEnhancerOverlay overlay;
     private final DancingNpcEffect dancingNpcEffect;
+    private final ConfettiCannonEffect confettiCannonEffect;
 
     @Inject
     CelebrationController(
         Client client,
         DopamineEnhancerConfig config,
         DopamineEnhancerOverlay overlay,
-        DancingNpcEffect dancingNpcEffect
+        DancingNpcEffect dancingNpcEffect,
+        ConfettiCannonEffect confettiCannonEffect
     )
     {
         this.client = client;
         this.config = config;
         this.overlay = overlay;
         this.dancingNpcEffect = dancingNpcEffect;
+        this.confettiCannonEffect = confettiCannonEffect;
     }
 
     public void celebrate(CelebrationType type)
@@ -41,6 +44,11 @@ public class CelebrationController
         if (config.dancingNpcEffect())
         {
             dancingNpcEffect.show();
+        }
+
+        if (config.confettiCannon())
+        {
+            confettiCannonEffect.show(config.confettiColorPalette());
         }
     }
 

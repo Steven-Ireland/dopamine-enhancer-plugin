@@ -8,6 +8,10 @@ import net.runelite.client.config.ConfigItem;
 @ConfigGroup("dopamineenhancer")
 public interface DopamineEnhancerConfig extends Config
 {
+    String GROUP = "dopamineenhancer";
+    String CONFETTI_CANNON_KEY = "confettiCannon";
+    String CONFETTI_COLOR_PALETTE_KEY = "confettiColorPalette";
+
     @ConfigItem(
         keyName = "questCelebrations",
         name = "Quest completions",
@@ -75,10 +79,32 @@ public interface DopamineEnhancerConfig extends Config
     }
 
     @ConfigItem(
+        keyName = CONFETTI_CANNON_KEY,
+        name = "Confetti cannon",
+        description = "Fire confetti from both sides of the screen during celebrations",
+        position = 6
+    )
+    default boolean confettiCannon()
+    {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = CONFETTI_COLOR_PALETTE_KEY,
+        name = "Confetti colors",
+        description = "Color palette used by the confetti cannon",
+        position = 7
+    )
+    default ConfettiColorPalette confettiColorPalette()
+    {
+        return ConfettiColorPalette.RAINBOW;
+    }
+
+    @ConfigItem(
         keyName = "dancingNpcAnimation",
         name = "NPC animation",
         description = "Animation to loop during dancing NPC celebrations",
-        position = 6
+        position = 8
     )
     default DancingNpcAnimation dancingNpcAnimation()
     {
@@ -89,7 +115,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "questSoundId",
         name = "Quest sound ID",
         description = "RuneLite sound effect ID for quest completions",
-        position = 7
+        position = 9
     )
     default int questSoundId()
     {
@@ -100,7 +126,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "collectionLogSoundId",
         name = "Collection log sound ID",
         description = "RuneLite sound effect ID for collection log entries",
-        position = 8
+        position = 10
     )
     default int collectionLogSoundId()
     {
@@ -111,7 +137,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "withdrawSoundId",
         name = "Withdraw sound ID",
         description = "RuneLite sound effect ID for withdraw actions",
-        position = 9
+        position = 11
     )
     default int withdrawSoundId()
     {
