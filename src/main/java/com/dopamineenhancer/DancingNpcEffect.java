@@ -14,7 +14,6 @@ import net.runelite.api.GameState;
 import net.runelite.api.Model;
 import net.runelite.api.ModelData;
 import net.runelite.api.NPCComposition;
-import net.runelite.api.NpcID;
 import net.runelite.api.Player;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ClientTick;
@@ -26,7 +25,6 @@ import net.runelite.client.eventbus.Subscribe;
 class DancingNpcEffect
 {
     private static final Duration CELEBRATION_DURATION = Duration.ofSeconds(10);
-    private static final int NPC_ID = NpcID.PARTY_PETE;
     private static final int SCREEN_OFFSET_X = -170;
     private static final int SCREEN_OFFSET_Y = 0;
     private static final int APPROXIMATE_MODEL_HEIGHT = 240;
@@ -42,6 +40,8 @@ class DancingNpcEffect
     private final Map<Integer, Animation> animationCache = new HashMap<>();
     private volatile int animationTicks;
     private int currentAnimationId = DancingNpcAnimation.DANCE.getAnimationId();
+    private int currentNpcId = DancingNpcModel.PARTY_PETE.getNpcId();
+    private int loadedNpcId = -1;
     private Instant expiresAt = Instant.EPOCH;
     private DancingNpcModelState modelState = DancingNpcModelState.inactive();
 
@@ -128,6 +128,7 @@ class DancingNpcEffect
         }
 
         animationTicks++;
+        switchNpcModel(selectedNpcId());
         switchAnimation(selectedAnimationId());
         updatePosition();
     }
@@ -143,7 +144,7 @@ class DancingNpcEffect
 
     private Model loadNpcModel()
     {
-        NPCComposition composition = client.getNpcDefinition(NPC_ID);
+        NPCComposition composition = client.getNpcDefinition(currentNpcId);
         if (composition == null)
         {
             return null;
@@ -188,7 +189,9 @@ class DancingNpcEffect
             merged.scale(composition.getWidthScale(), composition.getHeightScale(), composition.getWidthScale());
         }
 
-        return merged.light();
+        Model model = merged.light();
+        loadedNpcId = currentNpcId;
+        return model;
     }
 
     private void updatePosition()
@@ -263,6 +266,8 @@ class DancingNpcEffect
         expiresAt = Instant.EPOCH;
         animationTicks = 0;
         currentAnimationId = DancingNpcAnimation.DANCE.getAnimationId();
+        currentNpcId = DancingNpcModel.PARTY_PETE.getNpcId();
+        loadedNpcId = -1;
         baseModel = null;
         animationCache.clear();
         deactivate();
@@ -271,8 +276,21 @@ class DancingNpcEffect
     private void startCelebration()
     {
         expiresAt = Instant.now().plus(CELEBRATION_DURATION);
+        switchNpcModel(selectedNpcId());
         currentAnimationId = selectedAnimationId();
         animationTicks = 0;
+    }
+
+    private void switchNpcModel(int npcId)
+    {
+        if (currentNpcId == npcId)
+        {
+            return;
+        }
+
+        currentNpcId = npcId;
+        loadedNpcId = -1;
+        baseModel = null;
     }
 
     private void switchAnimation(int animationId)
@@ -297,9 +315,15 @@ class DancingNpcEffect
         return animation == null ? DancingNpcAnimation.DANCE.getAnimationId() : animation.getAnimationId();
     }
 
+    private int selectedNpcId()
+    {
+        DancingNpcModel model = config.dancingNpcModel();
+        return model == null ? DancingNpcModel.PARTY_PETE.getNpcId() : model.getNpcId();
+    }
+
     private Model getRenderModel(int ticks, int animationId, boolean animationLoops)
     {
-        if (baseModel == null)
+        if (baseModel == null || loadedNpcId != currentNpcId)
         {
             baseModel = loadNpcModel();
             if (baseModel == null)

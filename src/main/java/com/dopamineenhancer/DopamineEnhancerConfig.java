@@ -11,6 +11,8 @@ public interface DopamineEnhancerConfig extends Config
     String GROUP = "dopamineenhancer";
     String CONFETTI_CANNON_KEY = "confettiCannon";
     String CONFETTI_COLOR_PALETTE_KEY = "confettiColorPalette";
+    double MIN_CONFETTI_MULTIPLIER = 0.0d;
+    double MAX_CONFETTI_MULTIPLIER = 10.0d;
 
     @ConfigItem(
         keyName = "questCelebrations",
@@ -101,10 +103,32 @@ public interface DopamineEnhancerConfig extends Config
     }
 
     @ConfigItem(
+        keyName = "confettiMultiplier",
+        name = "Confetti multiplier",
+        description = "Particle multiplier used by the confetti cannon",
+        position = 8
+    )
+    default double confettiMultiplier()
+    {
+        return 1.0d;
+    }
+
+    @ConfigItem(
+        keyName = "dancingNpcModel",
+        name = "NPC model",
+        description = "NPC model to use for dancing NPC celebrations",
+        position = 9
+    )
+    default DancingNpcModel dancingNpcModel()
+    {
+        return DancingNpcModel.PARTY_PETE;
+    }
+
+    @ConfigItem(
         keyName = "dancingNpcAnimation",
         name = "NPC animation",
         description = "Animation to loop during dancing NPC celebrations",
-        position = 8
+        position = 10
     )
     default DancingNpcAnimation dancingNpcAnimation()
     {
@@ -115,7 +139,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "questSoundId",
         name = "Quest sound ID",
         description = "RuneLite sound effect ID for quest completions",
-        position = 9
+        position = 11
     )
     default int questSoundId()
     {
@@ -126,7 +150,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "collectionLogSoundId",
         name = "Collection log sound ID",
         description = "RuneLite sound effect ID for collection log entries",
-        position = 10
+        position = 12
     )
     default int collectionLogSoundId()
     {
@@ -137,7 +161,7 @@ public interface DopamineEnhancerConfig extends Config
         keyName = "withdrawSoundId",
         name = "Withdraw sound ID",
         description = "RuneLite sound effect ID for withdraw actions",
-        position = 11
+        position = 13
     )
     default int withdrawSoundId()
     {

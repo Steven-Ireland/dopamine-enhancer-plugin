@@ -20,6 +20,7 @@ class ConfettiCannonEffect
 {
     private static final Duration EFFECT_DURATION = Duration.ofSeconds(10);
     private static final int PARTICLES_PER_SECOND_PER_SIDE = 24;
+    private static final double DEFAULT_MULTIPLIER = 1.0d;
     private static final double GRAVITY = 720.0d;
 
     private Instant startedAt = Instant.EPOCH;
@@ -31,12 +32,12 @@ class ConfettiCannonEffect
     {
     }
 
-    void show(ConfettiColorPalette palette)
+    void show(ConfettiColorPalette palette, double multiplier)
     {
         ConfettiColorPalette selectedPalette = palette == null ? ConfettiColorPalette.RAINBOW : palette;
         startedAt = Instant.now();
         expiresAt = startedAt.plus(EFFECT_DURATION);
-        particles = createParticles(selectedPalette.getColors(), startedAt.toEpochMilli());
+        particles = createParticles(selectedPalette.getColors(), startedAt.toEpochMilli(), multiplier);
     }
 
     void clear()
@@ -99,16 +100,22 @@ class ConfettiCannonEffect
 
     static List<Particle> createParticles(Color[] colors, long seed)
     {
+        return createParticles(colors, seed, DEFAULT_MULTIPLIER);
+    }
+
+    static List<Particle> createParticles(Color[] colors, long seed, double multiplier)
+    {
         Random random = new Random(seed);
         double durationSeconds = EFFECT_DURATION.toMillis() / 1000.0d;
-        int particlesPerSide = (int) Math.ceil(durationSeconds * PARTICLES_PER_SECOND_PER_SIDE);
+        int particlesPerSide = particlesPerSide(multiplier, durationSeconds);
+        double launchesPerSecondPerSide = particlesPerSide / durationSeconds;
         List<Particle> createdParticles = new ArrayList<>(particlesPerSide * 2);
         for (int side = 0; side < 2; side++)
         {
             boolean fromLeft = side == 0;
             for (int i = 0; i < particlesPerSide; i++)
             {
-                double launchDelaySeconds = (i + random.nextDouble()) / PARTICLES_PER_SECOND_PER_SIDE;
+                double launchDelaySeconds = launchDelaySeconds(i, random.nextDouble(), launchesPerSecondPerSide);
                 double speedX = 170.0d + random.nextDouble() * 620.0d;
                 double velocityX = fromLeft ? speedX : -speedX;
                 double velocityY = -700.0d + random.nextDouble() * 620.0d;
@@ -131,6 +138,25 @@ class ConfettiCannonEffect
         }
 
         return createdParticles;
+    }
+
+    static int particlesPerSide(double multiplier, double durationSeconds)
+    {
+        double clampedMultiplier = Math.max(
+            DopamineEnhancerConfig.MIN_CONFETTI_MULTIPLIER,
+            Math.min(DopamineEnhancerConfig.MAX_CONFETTI_MULTIPLIER, multiplier)
+        );
+        return (int) Math.ceil(durationSeconds * PARTICLES_PER_SECOND_PER_SIDE * clampedMultiplier);
+    }
+
+    static double launchDelaySeconds(int particleIndex, double randomOffset, double launchesPerSecond)
+    {
+        if (launchesPerSecond <= 0.0d)
+        {
+            return 0.0d;
+        }
+
+        return (particleIndex + randomOffset) / launchesPerSecond;
     }
 
     static final class Particle

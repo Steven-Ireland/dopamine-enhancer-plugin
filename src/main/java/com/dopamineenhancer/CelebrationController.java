@@ -48,7 +48,7 @@ public class CelebrationController
 
         if (config.confettiCannon())
         {
-            confettiCannonEffect.show(config.confettiColorPalette());
+            confettiCannonEffect.show(config.confettiColorPalette(), config.confettiMultiplier());
         }
     }
 
